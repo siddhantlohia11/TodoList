@@ -115,23 +115,23 @@ app.post("/delete", function(req,res){
   res.redirect("/");
 });
 
-app.get("/work", function(req,res){
-
-    Worklist.find({},  function(err,list2){
-      if (list2.length === 0){
-        Worklist.insertMany([item4,item5], function(err){
-            if (err){
-              console.log(err);
-            } else{
-            console.log("Succesfully added all the fruits");
-            }
-        });
-        res.redirect("/work");
-       } else {
-        res.render("list", {listTitle: "Work", newListItems: list2});
-      }
-    });
-});
+// app.get("/work", function(req,res){
+//
+//     Worklist.find({},  function(err,list2){
+//       if (list2.length === 0){
+//         Worklist.insertMany([item4,item5], function(err){
+//             if (err){
+//               console.log(err);
+//             } else{
+//             console.log("Succesfully added all the fruits");
+//             }
+//         });
+//         res.redirect("/work");
+//        } else {
+//         res.render("list", {listTitle: "Work", newListItems: list2});
+//       }
+//     });
+// });
 
 app.get("/about", function(req, res){
   res.render("about");
