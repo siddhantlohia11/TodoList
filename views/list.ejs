@@ -5,7 +5,7 @@
   </div>
 
   <div class="box">
-    <form class="delete" action="/delete" method="post">
+    <form class="delete" action="/todo/delete" method="post">
       <% for (let i=0; i<newListItems.length; i++) { %>
         <div class="item">
           <input type="checkbox" name="delete" value="<%=newListItems[i]._id %>" onChange="this.form.submit()">
@@ -16,7 +16,7 @@
     </form>
 
 
-      <form class="item" action="/" method="post">
+      <form class="item" action="/todo" method="post">
         <input type="text" name="newItem"  placeholder="New Item" autocomplete="off">
         <button type="submit" name="list" value="<%=listTitle%>">+</button>
       </form>

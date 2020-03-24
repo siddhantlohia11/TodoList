@@ -1,18 +1,19 @@
 //jshint esversion:6
-
+require('dotenv').config();
 const express = require("express");
+const ejs = require("ejs");
 const bodyParser = require("body-parser");
 const date = require(__dirname + "/date.js");
 const _ = require('lodash');
 const app = express();
 const mongoose = require('mongoose');
-// mongoose.connect('mongodb+srv://admin-Siddhant:qwerty123@cluster0-33zzh.mongodb.net/newDB', {useNewUrlParser: true, useUnifiedTopology: true});
+const session = require('express-session');
+const passport = require('passport');
+const passportLocalMongoose = require('passport-local-mongoose');
+const findOrCreate = require("mongoose-findorcreate");
 
-mongoose.connect("mongodb://localhost:27017/newDB", {useNewUrlParser: true, useUnifiedTopology: true});
-mongoose.set('useNewUrlParser', true);
-mongoose.set('useFindAndModify', false);
-mongoose.set('useCreateIndex', true);
-mongoose.set('useUnifiedTopology', true);
+
+// mongoose.connect('mongodb+srv://admin-Siddhant:qwerty123@cluster0-33zzh.mongodb.net/newDB', {useNewUrlParser: true, useUnifiedTopology: true});
 
 
 app.set('view engine', 'ejs');
@@ -20,8 +21,46 @@ app.set('view engine', 'ejs');
 app.use(bodyParser.urlencoded({extended: true}));
 app.use(express.static("public"));
 
+app.use(session({
+  secret: "Our Little Secret",
+  resave: false,
+  saveUninitialized: false
+}));
+
+app.use(passport.initialize());
+app.use(passport.session());
+
 const defaultlist = [];
 const workItems = [];
+
+mongoose.connect('mongodb+srv://admin-Siddhant:qwerty123@cluster0-33zzh.mongodb.net/newDB', {useNewUrlParser: true, useUnifiedTopology: true});
+// mongoose.connect("mongodb://localhost:27017/newDB", {useNewUrlParser: true, useUnifiedTopology: true});
+mongoose.set('useNewUrlParser', true);
+mongoose.set('useFindAndModify', false);
+mongoose.set('useCreateIndex', true);
+mongoose.set('useUnifiedTopology', true);
+
+const userSchema = new mongoose.Schema ({
+  email: String,
+  password: String,
+  facebookId: String
+});
+
+userSchema.plugin(passportLocalMongoose);
+userSchema.plugin(findOrCreate);
+
+const User = new mongoose.model("User", userSchema);
+passport.use(User.createStrategy());
+
+passport.serializeUser(function(user, done) {
+  done(null, user.id);
+});
+
+passport.deserializeUser(function(id, done) {
+  User.findById(id, function(err, user) {
+    done(err, user);
+  });
+});
 
 const listSchema = new mongoose.Schema ({
   name: {
@@ -55,9 +94,54 @@ const item3 = new List ({
 
 defaultlist.push(item1,item2,item3);
 
+passport.use(new FacebookStrategy({
+    clientID: FACEBOOK_APP_ID,
+    clientSecret: FACEBOOK_APP_SECRET,
+    callbackURL: "https://limitless-springs-32054.herokuapp.com/auth/facebook/secrets"
+  },
+  function(accessToken, refreshToken, profile, cb) {
+    User.findOrCreate({ facebookId: profile.id }, function (err, user) {
+      return cb(err, user);
+    });
+  }
+));
 
+app.get('/auth/facebook',
+  passport.authenticate('facebook'));
 
-app.get("/", function(req, res) {
+app.get('/auth/facebook/callback',
+  passport.authenticate('facebook', { failureRedirect: '/login' }),
+  function(req, res) {
+    // Successful authentication, redirect home.
+    res.redirect('/');
+  });
+
+app.get("/", function(req,res){
+  res.render("home");
+});
+
+app.get("/login", function(req,res){
+  res.render("login");
+});
+
+app.get("/register", function(req,res){
+  res.render("register");
+});
+
+app.get("/secrets", function(req,res){
+  if (req.isAuthenticated()){
+    res.render("secrets");
+  } else{
+    res.redirect("/login");
+  }
+});
+
+app.get("/logout", function(req,res){
+  req.logout();
+  res.redirect("/");
+});
+
+app.get("/todo", function(req, res) {
   const day = date.getDate();
 
   List.find({},  function(err,list){
@@ -69,14 +153,14 @@ app.get("/", function(req, res) {
           console.log("Succesfully added all the fruits");
           }
       });
-      res.redirect("/");
+      res.redirect("/todo");
      } else {
       res.render("list", {listTitle: day, newListItems: list});
     }
   });
 });
 
-app.get('/:userid', function(req,res){
+app.get('/todo/:userid', function(req,res){
   var dynamic = _.capitalize(req.params.userid);
   DynamicList.findOne({name: dynamic}, function(err,foundList){
     if (!err){
@@ -86,7 +170,7 @@ app.get('/:userid', function(req,res){
           items: defaultlist
         });
         dynamiclist.save();
-        res.redirect("/" + dynamic);
+        res.redirect("/todo/" + dynamic);
       } else{
         res.render("list", {listTitle: dynamic, newListItems:foundList.items})
       }
@@ -95,7 +179,38 @@ app.get('/:userid', function(req,res){
 });
 
 
-app.post("/", function(req, res){
+app.post("/register", function(req,res){
+  User.register({username: req.body.username}, req.body.password, function(err, user) {
+    if (err){
+      console.log(err);
+      res.redirect("/register");
+    } else{
+      passport.authenticate("local")(req,res,function(){
+        res.redirect("/secrets");
+      });
+    }
+  });
+});
+
+app.post("/login", function(req,res){
+  const user = new User ({
+    username: req.body.username,
+    password: req.body.passowrd
+  });
+
+  req.login(user, function (err){
+    if(err){
+      console.log(err);
+    } else{
+      passport.authenticate("local")(req,res,function(){
+        res.redirect("/secrets");
+      });
+    }
+  });
+});
+
+
+app.post("/todo", function(req, res){
   const item = req.body.newItem;
   const listName = req.body.list;
 
@@ -106,17 +221,17 @@ app.post("/", function(req, res){
 
   if (listName === day){
     nextItem.save();
-    res.redirect("/");
+    res.redirect("/todo");
   } else {
     DynamicList.findOne({name:listName}, function(err,foundList){
       foundList.items.push(nextItem);
       foundList.save();
-      res.redirect("/" + listName);
+      res.redirect("/todo/" + listName);
     });
   }
 });
 
-app.post("/delete", function(req,res){
+app.post("/todo/delete", function(req,res){
   const day = date.getDate();
   var deleteItem = req.body.delete;
   var namee = req.body.namee;
@@ -124,19 +239,17 @@ app.post("/delete", function(req,res){
     List.findByIdAndRemove(deleteItem, function(err){
       if (!err){
         console.log("Succesfully deleted an item");
-        res.redirect("/");
+        res.redirect("/todo");
         }
     });
   } else {
     DynamicList.findOneAndUpdate({name: namee }, {$pull:{items:{_id: deleteItem}}}, function(err,findList){
       if (!err){
-        res.redirect("/" + namee);
+        res.redirect("/todo/" + namee);
       }
     });
   }
 });
-
-// app.listen(port);
 
 
 app.get("/about", function(req, res){
